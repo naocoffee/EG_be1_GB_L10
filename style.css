@@ -97,3 +97,15 @@ button:focus-visible { outline: 2px solid var(--text); outline-offset: 2px; }
 .note { font-size: 14px; color: var(--sub); }
 
 .result { font-size: 22px; margin: 8px 0 24px; }
+
+#sid {
+  font: inherit;
+  font-size: 20px;
+  width: 5em;
+  padding: 4px 8px;
+  letter-spacing: 0.1em;
+  border: 1px solid var(--text);
+  border-radius: 4px;
+  background: var(--bg);
+  color: var(--text);
+}

@@ -4,6 +4,13 @@
 
 const LESSON_TITLE = "Lesson 10　不定詞①（名詞用法）";
 
+// 学習記録：スプレッドシートの「Lesson」列に記録する名前
+const LESSON_ID = "Lesson 10";
+
+// 学習記録の送信先（Google Apps Script のウェブアプリ URL を "" の中に貼る）。空のままなら記録は送らない
+const LOG_URL = "";
+
+
 // 最初に選べる問題数（収録問題数を超える数は「全問」の数に置きかえて表示）
 const COUNT_OPTIONS = [10, 20, 30];
 
@@ -174,12 +181,55 @@ const VERB_CHOICES = [];
 // ここから下はロジック（通常は編集不要）
 // =====================================================================
 
+// 旧形式（before / answer / after）の form 問題を template 形式にそろえる
+QUESTIONS.forEach(q => {
+  if (q.type === "form" && !q.template) {
+    q.template = [q.before, "{}", q.after].filter(Boolean).join(" ");
+    q.answer = [q.answer];
+    q.dummies = q.dummies.map(d => [d]);
+  }
+});
+
 const app = document.getElementById("app");
 const progressEl = document.getElementById("progress");
 
 let queue = [];    // 出題する問題（QUESTIONS のインデックス）
 let records = [];  // 各問の解答状態 { result, choice, sels, picked, pool }
 let pos = 0;
+let studentId = "";
+
+// ---------- 学籍番号の保存（この端末のブラウザに記憶） ----------
+function loadId() {
+  try { return localStorage.getItem("studentId") || ""; } catch (e) { return ""; }
+}
+function saveId(id) {
+  try { localStorage.setItem("studentId", id); } catch (e) {}
+}
+
+// ---------- 学習記録の送信 ----------
+const RESULT_LABELS = { correct: "正解", wrong: "不正解", skipped: "とばした" };
+
+function chosenText(q, rec) {
+  if (rec.result === "skipped") return "";
+  if (q.type === "form") return optionLabel(q, rec.options[rec.choice]);
+  if (q.type === "blanks") return rec.sels.join(" / ");
+  return rec.picked.map(pi => rec.pool[pi]).join(" ");
+}
+
+function sendLog(q, rec) {
+  if (!LOG_URL) return;
+  const body = JSON.stringify({
+    student: studentId,
+    lesson: LESSON_ID,
+    question: q.src,
+    result: RESULT_LABELS[rec.result],
+    choice: chosenText(q, rec)
+  });
+  try {
+    fetch(LOG_URL, { method: "POST", mode: "no-cors", headers: { "Content-Type": "text/plain" }, body })
+      .catch(() => {});
+  } catch (e) {}
+}
 
 function shuffle(arr) {
   const a = arr.slice();
@@ -231,11 +281,26 @@ function isChecked(rec) { return !!rec.result; }
 function renderHome() {
   progressEl.textContent = "";
   const counts = [...new Set(COUNT_OPTIONS.map(n => Math.min(n, QUESTIONS.length)))];
-  let html = `<p class="ja">問題数を選んでください（全${QUESTIONS.length}問から出題）</p><div class="actions">`;
-  html += counts.map(n => `<button class="primary" data-n="${n}">${n}問</button>`).join("");
+  let html = `<p class="ja">学籍番号（4桁）</p>`;
+  html += `<p><input type="text" id="sid" inputmode="numeric" maxlength="4" autocomplete="off" value="${esc(studentId || loadId())}"></p>`;
+  html += `<p class="ja">問題数を選んでください（全${QUESTIONS.length}問から出題）</p><div class="actions">`;
+  html += counts.map(n => `<button class="primary count" data-n="${n}">${n}問</button>`).join("");
   html += `</div>`;
   app.innerHTML = html;
-  app.querySelectorAll("button").forEach(b => b.addEventListener("click", () => {
+
+  const sid = document.getElementById("sid");
+  const buttons = app.querySelectorAll("button.count");
+  const update = () => {
+    sid.value = sid.value.replace(/[０-９]/g, c => String.fromCharCode(c.charCodeAt(0) - 0xFEE0))
+                         .replace(/\D/g, "").slice(0, 4);
+    buttons.forEach(b => b.disabled = !/^\d{4}$/.test(sid.value));
+  };
+  sid.addEventListener("input", update);
+  update();
+
+  buttons.forEach(b => b.addEventListener("click", () => {
+    studentId = sid.value;
+    saveId(studentId);
     start(shuffle(QUESTIONS.map((_, i) => i)).slice(0, Number(b.dataset.n)));
   }));
 }
@@ -252,7 +317,7 @@ function renderQuestion() {
   const q = QUESTIONS[queue[pos]];
   const rec = records[pos];
   const checked = isChecked(rec);
-  progressEl.textContent = `${pos + 1} / ${queue.length}`;
+  progressEl.textContent = `${studentId}｜${pos + 1} / ${queue.length}`;
 
   let html = `<p class="source">EXERCISES ${esc(q.src)}</p>`;
   html += `<p class="instruction">${INSTRUCTIONS[q.inst || q.type]}</p>`;
@@ -389,12 +454,14 @@ function onMain() {
   const rec = records[pos];
   if (isChecked(rec)) { next(); return; }
   rec.result = judge(q, rec) ? "correct" : "wrong";
+  sendLog(q, rec);
   renderQuestion();
   document.getElementById("main").focus();
 }
 
 function onSkip() {
   records[pos].result = "skipped";
+  sendLog(QUESTIONS[queue[pos]], records[pos]);
   renderQuestion();
   document.getElementById("main").focus();
 }
