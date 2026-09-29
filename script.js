@@ -8,7 +8,7 @@ const LESSON_TITLE = "Lesson 10　不定詞①（名詞用法）";
 const LESSON_ID = "Lesson 10";
 
 // 学習記録の送信先（Google Apps Script のウェブアプリ URL を "" の中に貼る）。空のままなら記録は送らない
-const LOG_URL = "https://script.google.com/macros/s/AKfycbzmgGcLSJc50ijxHDKUCTmUPB8dhkbjAKqpgby6tvqltto-PMfC2qTDAHjoYE36-NHI/exec";
+const LOG_URL = "";
 
 
 // 最初に選べる問題数（収録問題数を超える数は「全問」の数に置きかえて表示）
@@ -197,6 +197,7 @@ let queue = [];    // 出題する問題（QUESTIONS のインデックス）
 let records = [];  // 各問の解答状態 { result, choice, sels, picked, pool }
 let pos = 0;
 let studentId = "";
+let sessionLabel = "";  // 記録用：出題数（例：「10問」「復習5問」）
 
 // ---------- 学籍番号の保存（この端末のブラウザに記憶） ----------
 function loadId() {
@@ -223,7 +224,8 @@ function sendLog(q, rec) {
     lesson: LESSON_ID,
     question: q.src,
     result: RESULT_LABELS[rec.result],
-    choice: chosenText(q, rec)
+    choice: chosenText(q, rec),
+    count: sessionLabel
   });
   try {
     fetch(LOG_URL, { method: "POST", mode: "no-cors", headers: { "Content-Type": "text/plain" }, body })
@@ -301,11 +303,12 @@ function renderHome() {
   buttons.forEach(b => b.addEventListener("click", () => {
     studentId = sid.value;
     saveId(studentId);
-    start(shuffle(QUESTIONS.map((_, i) => i)).slice(0, Number(b.dataset.n)));
+    start(shuffle(QUESTIONS.map((_, i) => i)).slice(0, Number(b.dataset.n)), `${b.dataset.n}問`);
   }));
 }
 
-function start(indices) {
+function start(indices, label) {
+  sessionLabel = label;
   queue = shuffle(indices);
   records = queue.map(() => ({}));
   pos = 0;
@@ -486,7 +489,7 @@ function renderResult() {
   html += `<button id="home">問題数を選び直す</button></div>`;
   app.innerHTML = html;
 
-  if (missed.length) document.getElementById("retryWrong").addEventListener("click", () => start(missed));
+  if (missed.length) document.getElementById("retryWrong").addEventListener("click", () => start(missed, `復習${missed.length}問`));
   document.getElementById("home").addEventListener("click", renderHome);
 }
 
