@@ -279,6 +279,16 @@ function displayChunk(q, text, isFirst) {
 // 答え合わせ済み、またはとばした問題は解答を確定（解説を表示）
 function isChecked(rec) { return !!rec.result; }
 
+// 練習を始めたときに1行送る（sessions シート用）
+function sendSession() {
+  if (!LOG_URL) return;
+  const body = JSON.stringify({ type: "session", student: studentId, lesson: LESSON_ID, count: sessionLabel });
+  try {
+    fetch(LOG_URL, { method: "POST", mode: "no-cors", headers: { "Content-Type": "text/plain" }, body })
+      .catch(() => {});
+  } catch (e) {}
+}
+
 // ---------- 画面：問題数の選択 ----------
 function renderHome() {
   progressEl.textContent = "";
@@ -309,6 +319,7 @@ function renderHome() {
 
 function start(indices, label) {
   sessionLabel = label;
+  sendSession();
   queue = shuffle(indices);
   records = queue.map(() => ({}));
   pos = 0;
